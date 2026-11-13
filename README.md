@@ -1,5 +1,8 @@
 # Stream Picker
 
+> ⚠️ **AI slop warning:** this was slopped together by Claude (Anthropic's AI) in one long chat session,
+> with me just asking for features. It works for me, but the code is a mess. Don't take it as an example of anything.
+
 A small local web UI around **ffprobe / ffmpeg** for checking videos and getting them ready for a TV.
 Pick a file or a whole folder, see what's inside and whether it will play, choose what to keep or convert,
 and get a ready-to-run ffmpeg command or `.bat` file. Nothing is converted until you run it yourself.
