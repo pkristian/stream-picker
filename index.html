@@ -1,0 +1,1445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stream Picker</title>
+<style>
+  :root {
+    --bg: #f3f5f9; --panel: #ffffff; --panel-2: #f8f9fc; --text: #172033; --muted: #667085; --border: #e3e7ee;
+    --accent: #4f46e5; --accent-strong: #3730a3; --accent-soft: #eef0ff; --accent-text: #ffffff;
+    --warn: #9a5b00; --warn-bg: #fff6e5; --err: #c0262d; --err-bg: #fdecec; --ok: #067647;
+    --code-bg: #0f1424; --code-text: #dbe4f3; --code-head: #171d31;
+    --video: #2563eb; --audio: #059669; --subtitle: #d97706; --attachment: #7c3aed; --data: #64748b;
+    --forced: #dc2626; --sdh: #7c3aed;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 4px 16px rgba(16, 24, 40, .04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117; --panel: #161b22; --panel-2: #1b212a; --text: #e6edf3; --muted: #8b949e; --border: #2a313c;
+      --accent: #818cf8; --accent-strong: #c7cbff; --accent-soft: #23264a; --accent-text: #0d1117;
+      --warn: #f5b759; --warn-bg: #2d2412; --err: #ff8a8a; --err-bg: #3a1618; --ok: #4ade80;
+      --code-bg: #0a0d14; --code-text: #dbe4f3; --code-head: #121726;
+      --video: #60a5fa; --audio: #34d399; --subtitle: #fbbf24; --attachment: #a78bfa; --data: #94a3b8;
+      --forced: #f87171; --sdh: #c4b5fd;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1160px; margin: 0 auto; padding: 0 16px 56px; }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; vertical-align: middle; cursor: pointer; }
+  .mono { font-family: "Cascadia Code", Consolas, monospace; font-size: 12.5px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12.5px; }
+  .hidden { display: none !important; }
+
+  /* header */
+  .top { display: flex; align-items: center; gap: 14px; padding: 28px 0 20px; }
+  .logo { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 20px;
+    background: linear-gradient(135deg, var(--video), var(--attachment)); color: #fff; box-shadow: var(--shadow); }
+  .top h1 { margin: 0; font-size: 21px; letter-spacing: -.01em; }
+  .top .sub { color: var(--muted); font-size: 13px; }
+
+  /* cards */
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
+  .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .card-head h2 { margin: 0; font-size: 15px; }
+  .step { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700;
+    background: var(--accent-soft); color: var(--accent-strong); }
+  .file-title { font-weight: 600; word-break: break-all; }
+
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=text] { flex: 1; min-width: 220px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px;
+    background: var(--panel-2); color: var(--text); font: inherit; outline: none; transition: border-color .15s, box-shadow .15s; }
+  input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  button { padding: 8px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--panel); color: var(--text);
+    font: inherit; font-weight: 500; cursor: pointer; transition: background .15s, border-color .15s; }
+  button:hover { background: var(--panel-2); border-color: var(--muted); }
+  button:disabled { opacity: .55; cursor: progress; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  button.primary:hover { filter: brightness(1.08); background: var(--accent); }
+  .hint { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+  .error { margin-top: 10px; color: var(--err); background: var(--err-bg); padding: 8px 12px; border-radius: 9px; white-space: pre-wrap; }
+  .error:empty { display: none; }
+
+  /* chips */
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 2px 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
+  .toggle { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px;
+    cursor: pointer; user-select: none; background: var(--panel); transition: background .15s, border-color .15s; }
+  .toggle:has(input:checked), .toggle.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }
+  .toggle select { border: none; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; outline: none; padding: 0; }
+  .toggle select option { background: var(--panel); color: var(--text); }
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 10px; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 11px; margin-bottom: 14px; }
+  .toolbar input[type=text] { background: var(--panel); }
+
+  /* stream table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  th { white-space: nowrap; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; padding: 4px 10px 8px; }
+  td { padding: 8px 10px; border-top: 1px solid var(--border); vertical-align: middle; }
+  tbody[data-type=video] { --c: var(--video); }
+  tbody[data-type=audio] { --c: var(--audio); }
+  tbody[data-type=subtitle] { --c: var(--subtitle); }
+  tbody[data-type=attachment] { --c: var(--attachment); }
+  tbody[data-type=data] { --c: var(--data); }
+  tbody tr:not(.group-head):not(.note-row) td:first-child { box-shadow: inset 3px 0 var(--c); }
+  tbody tr:not(.group-head):not(.note-row):hover td { background: color-mix(in srgb, var(--c) 6%, transparent); }
+  tr.off td:not(:first-child) { opacity: .4; }
+  tr.off td.title { text-decoration: line-through; }
+  .group-head td { border-top: none; padding: 22px 0 8px; }
+  .gh { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border-radius: 10px;
+    background: color-mix(in srgb, var(--c) 10%, transparent); }
+  .gh-title { font-weight: 700; text-transform: capitalize; color: var(--c); }
+  .count { font-size: 12px; color: var(--muted); }
+  .gh-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--panel); }
+  .seg button { border: none; border-radius: 0; padding: 3px 10px; font-size: 12px; background: transparent; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button:hover { background: var(--panel-2); }
+  .lang-seg button { padding: 1px 8px; font: 600 11px/1.6 "Cascadia Code", Consolas, monospace; text-transform: uppercase; color: var(--muted); }
+  .lang-seg button.on { background: color-mix(in srgb, var(--c) 18%, transparent); color: var(--c); }
+  .seg-label { color: var(--muted); margin-left: 6px; }
+  .radio-chip { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+  .radio-chip input { width: 14px; height: 14px; }
+  .idx { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .title { font-weight: 500; }
+  input[type=text].title-input { min-width: 150px; width: 100%; padding: 4px 8px; font-size: 13px; font-weight: 500; border-radius: 7px; background: var(--panel); }
+  input[type=text].title-input.changed { border-color: var(--ok); }
+  input[type=text].title-input.removed { border-color: var(--forced); }
+  input[type=text].title-input.removed::placeholder { color: var(--forced); font-style: italic; }
+  .title-wrap { display: flex; gap: 4px; align-items: center; }
+  .x-btn { padding: 2px 8px; font-size: 12px; line-height: 1.4; color: var(--muted); border-radius: 7px; }
+  .x-btn:hover { color: var(--forced); border-color: var(--forced); }
+  td.def { white-space: nowrap; }
+  .x-btn.lang-btn { color: var(--c); white-space: nowrap; font-weight: 600; }
+  .x-btn.lang-btn:hover { color: var(--c); border-color: var(--c); background: color-mix(in srgb, var(--c) 10%, transparent); }
+  .small-btn { padding: 4px 10px; font-size: 12.5px; }
+  .file-meta { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--panel-2); }
+  .fm-head { font-weight: 600; margin-bottom: 8px; }
+  .fm-head .muted { font-weight: 400; margin-left: 6px; }
+  #fileTitleIn { flex: 1; }
+  .chip.struck { text-decoration: line-through; opacity: .6; }
+  .chip b { font-weight: 600; }
+  .lang { display: inline-block; font: 600 11px/1.6 "Cascadia Code", Consolas, monospace; text-transform: uppercase; padding: 0 7px;
+    border-radius: 6px; background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c); }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; margin: 1px 4px 1px 0; border: 1px solid transparent; }
+  .flag-default { background: var(--accent-soft); color: var(--accent-strong); }
+  .flag-forced { background: color-mix(in srgb, var(--forced) 14%, transparent); color: var(--forced); }
+  .flag-hearing_impaired { background: color-mix(in srgb, var(--sdh) 14%, transparent); color: var(--sdh); }
+  .flag-comment { background: var(--panel-2); color: var(--muted); border-color: var(--border); }
+  .conv { font: 600 11px/1.6 "Cascadia Code", Consolas, monospace; padding: 0 6px; border-radius: 6px;
+    background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); white-space: nowrap; }
+  .compat { margin-top: 2px; font-size: 12px; }
+  .compat.bad { color: var(--err); }
+  .compat.maybe { color: var(--warn); }
+  .compat.ok { color: var(--ok); }
+  .tag-ext { background: color-mix(in srgb, var(--subtitle) 16%, transparent); color: var(--subtitle); }
+  .note-row td { border-top: none; padding: 4px 0; }
+  .ext-note, .hidden-note { padding: 8px 12px; border-radius: 9px; font-size: 13px; }
+  .ext-note { background: var(--warn-bg); color: var(--text); border: 1px dashed color-mix(in srgb, var(--subtitle) 50%, transparent); }
+  .hidden-note { color: var(--muted); background: var(--panel-2); }
+
+  /* output */
+  .opts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  .conv-step { display: grid; grid-template-columns: 120px 1fr; gap: 6px 14px; padding: 14px 0; border-top: 1px solid var(--border); }
+  .conv-step:first-child { border-top: none; padding-top: 0; }
+  .conv-step h3 { margin: 6px 0 0; font-size: 14px; }
+  .conv-step .hint { margin-top: 6px; }
+  @media (max-width: 640px) { .conv-step { grid-template-columns: 1fr; } }
+  .radios { display: flex; gap: 8px; flex-wrap: wrap; align-items: stretch; }
+  .radios.sub { margin-top: 10px; align-items: center; }
+  .radios-label { font-size: 12.5px; color: var(--muted); margin-right: 2px; }
+  .radio-opt { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; padding: 7px 12px;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--panel); cursor: pointer; user-select: none;
+    transition: background .15s, border-color .15s; }
+  .radio-opt:hover { border-color: var(--muted); }
+  .radio-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }
+  .radio-opt b { font-weight: 600; font-size: 13px; }
+  .radio-opt span { grid-column: 2; font-size: 11.5px; color: var(--muted); }
+  .recap-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 14px; font-size: 13px; }
+  .recap-facts dt { color: var(--muted); white-space: nowrap; }
+  .recap-facts dd { margin: 0; word-break: break-all; }
+  table.recap td { font-size: 13px; }
+  table.recap .compat { margin: 0; white-space: nowrap; }
+  .dir-agg { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin-bottom: 14px; font-size: 13px; align-items: baseline; }
+  .dir-agg dt { color: var(--muted); white-space: nowrap; }
+  .dir-agg dd { margin: 0; display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+  .dir-agg .chip b { color: var(--text); }
+  .dir-agg button.chip { padding: 2px 10px; font-size: 12px; font-weight: 400; border-radius: 999px; }
+  .dir-agg button.chip:hover { border-color: var(--accent); }
+  .dir-agg button.chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }
+  .dir-agg button.chip.on b { color: var(--accent-strong); }
+  .dir-agg button.chip.zero { opacity: .45; }
+  table.dir td { font-size: 13px; vertical-align: top; }
+  table.dir tbody tr td:first-child { box-shadow: inset 3px 0 var(--st, var(--border)); }
+  table.dir tr.st-ok { --st: var(--ok); }
+  table.dir tr.st-maybe { --st: var(--warn); }
+  table.dir tr.st-bad { --st: var(--err); }
+  table.dir a { color: var(--text); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+  table.dir td:first-child { min-width: 240px; }
+  table.dir a:hover { color: var(--accent); text-decoration: underline; }
+  .trk { white-space: nowrap; line-height: 1.7; }
+  .trk .lang { --c: var(--audio); }
+  .subs .lang { --c: var(--subtitle); margin: 1px 3px 1px 0; }
+  .hdr-tag { font-size: 11px; font-weight: 600; padding: 0 7px; border-radius: 6px; background: color-mix(in srgb, var(--attachment) 16%, transparent); color: var(--attachment); }
+  .summary { padding: 10px 12px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-strong); font-size: 13px; }
+  .summary:empty { display: none; }
+  #convPanel.off .conv-body { opacity: .45; pointer-events: none; }
+  #convPanel:not(.off) #convOff { display: none; }
+  #reencWarn .warn, #reencWarn .summary { margin-top: 8px; }
+  #reencWarn ul { margin: 4px 0 0; padding-left: 20px; }
+  .srt-list { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--subtitle) 8%, transparent); }
+  .srt-list:empty { display: none; }
+  .srt-head { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+  .srt-list .file { font: 12.5px/1.6 "Cascadia Code", Consolas, monospace; word-break: break-all; color: var(--muted); }
+  .warn { color: var(--warn); background: var(--warn-bg); padding: 8px 12px; border-radius: 9px; margin-top: 10px; }
+
+  /* command */
+  .code-card { margin-top: 18px; border-radius: 12px; overflow: hidden; background: var(--code-bg); border: 1px solid var(--border); }
+  .code-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--code-head); flex-wrap: wrap; }
+  .tab { border: none; background: transparent; color: #8f9bb3; padding: 6px 12px; border-radius: 8px; font-size: 13px; }
+  .tab:hover { background: rgba(255, 255, 255, .06); color: #dbe4f3; }
+  .tab.active { background: rgba(255, 255, 255, .1); color: #fff; }
+  .code-hint { color: #8f9bb3; font-size: 12px; margin-left: 6px; }
+  .code-actions { margin-left: auto; display: flex; gap: 6px; }
+  .code-actions button { background: rgba(255, 255, 255, .08); border-color: transparent; color: #e6edf3; padding: 6px 12px; font-size: 13px; }
+  .code-actions button:hover { background: rgba(255, 255, 255, .16); }
+  .code-actions button.primary { background: var(--accent); color: var(--accent-text); }
+  .code-actions button.done { background: var(--ok); color: #fff; }
+  pre { margin: 0; padding: 14px 16px; color: var(--code-text); overflow-x: auto; white-space: pre-wrap; word-break: break-all;
+    font: 13px/1.6 "Cascadia Code", Consolas, monospace; }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div class="logo">🎬</div>
+    <div>
+      <h1>Stream Picker</h1>
+      <div class="sub">Choose which video, audio and subtitle streams to keep and get a ready ffmpeg command</div>
+    </div>
+  </header>
+
+  <section class="card">
+    <div class="card-head"><span class="step">1</span><h2>Pick a file or folder</h2></div>
+    <div class="row">
+      <input type="text" id="path" list="files" placeholder="File or folder (relative to base folder) or full path">
+      <datalist id="files"></datalist>
+      <button id="browseBtn">📂 Browse file…</button>
+      <button id="browseDirBtn" title="In the dialog: open the folder, then click Open">🗂️ Browse folder…</button>
+      <button class="primary" id="probeBtn">Probe</button>
+    </div>
+    <div class="hint" id="baseDir"></div>
+    <div class="error" id="err"></div>
+  </section>
+
+  <section class="card hidden" id="dirPanel">
+    <div class="card-head">
+      <span class="step">2</span><h2>Folder</h2>
+      <span class="file-title" id="dirTitle"></span>
+    </div>
+    <div id="dirAgg"></div>
+    <div class="toolbar">
+      <span id="dirCount"></span>
+      <button class="small-btn" id="dirClear">✕ Clear filters</button>
+      <label class="toggle"><input type="checkbox" id="dirRecursive" checked> Include subfolders</label>
+      <span class="muted small">Click a name to open it in a new tab</span>
+    </div>
+    <div class="table-wrap"><table id="dirTable" class="dir"></table></div>
+  </section>
+
+  <section class="card hidden" id="streamsPanel">
+    <div class="card-head">
+      <span class="step">2</span><h2>Streams</h2>
+      <span class="file-title" id="fileTitle"></span>
+    </div>
+    <div class="chips" id="fileInfo" style="margin-bottom:14px"></div>
+    <div class="toolbar">
+      <label class="toggle"><input type="checkbox" id="optEnCz" checked> English + Czech subtitles only</label>
+      <input type="text" id="langs" placeholder="Keep only languages, e.g. eng, cze (audio + subtitles)">
+      <button id="langBtn">Apply</button>
+      <button id="addSubBtn" title="Pick any .srt/.ass/.vtt/.sup file, e.g. one whose name doesn't match the video">➕ Add subtitle file…</button>
+      <span class="muted small" id="addSubMsg"></span>
+    </div>
+    <div class="table-wrap"><table id="streams"></table></div>
+  </section>
+
+  <section class="card hidden" id="convPanel">
+    <div class="card-head"><span class="step">3</span><h2>Convert</h2>
+      <span class="muted small" id="convOff">Video file is off (step 4): nothing below applies</span></div>
+    <div class="conv-body">
+      <div class="conv-step">
+        <h3>📺 Format</h3>
+        <div>
+          <div class="radios" id="optPreset">
+            <label class="radio-opt"><input type="radio" name="preset" value="asis"><b>As is</b><span>copy everything</span></label>
+            <label class="radio-opt"><input type="radio" name="preset" value="tv"><b>TV safe</b><span>drop Dolby Vision, risky audio → AC-3</span></label>
+            <label class="radio-opt"><input type="radio" name="preset" value="tvmax"><b>TV max</b><span>drop Dolby Vision, all audio → AC-3</span></label>
+            <label class="radio-opt"><input type="radio" name="preset" value="tvhevc"><b>TV re-encode</b><span>video → HEVC, all audio → AC-3 (slow)</span></label>
+          </div>
+          <div class="hint">Sets Video + Audio below<span id="presetCustom">. <b>Custom:</b> Video / Audio were changed by hand</span>.</div>
+        </div>
+      </div>
+      <div class="conv-step">
+        <h3>🎞️ Video</h3>
+        <div>
+          <div class="radios" id="optVideo">
+            <label class="radio-opt"><input type="radio" name="video" value="keep"><b>Copy</b><span>picture untouched</span></label>
+            <label class="radio-opt"><input type="radio" name="video" value="strip"><b>Drop Dolby Vision</b><span>copy → plain HDR10</span></label>
+            <label class="radio-opt"><input type="radio" name="video" value="hevc"><b>→ HEVC 10-bit</b><span>re-encode, keeps HDR10</span></label>
+            <label class="radio-opt"><input type="radio" name="video" value="h264"><b>→ H.264 8-bit</b><span>re-encode, HDR → SDR</span></label>
+          </div>
+          <div class="radios sub" id="encWrap">
+            <span class="radios-label">Encoder</span>
+            <span class="radios" id="optEnc">
+              <label class="radio-opt"><input type="radio" name="enc" value="cpu"><b>CPU</b><span>x265 / x264 · best quality per MB, slow</span></label>
+              <label class="radio-opt"><input type="radio" name="enc" value="gpu"><b>GPU</b><span>NVIDIA NVENC · ~10× faster, slightly bigger</span></label>
+            </span>
+          </div>
+          <div class="radios sub" id="resWrap">
+            <span class="radios-label">Resolution</span>
+            <span class="radios" id="optRes">
+              <label class="radio-opt"><input type="radio" name="res" value="orig"><b>Original</b><span>no scaling</span></label>
+              <label class="radio-opt"><input type="radio" name="res" value="2160"><b>Max 4K</b><span>above 4K won't play on a 4K TV</span></label>
+              <label class="radio-opt"><input type="radio" name="res" value="1080"><b>Max 1080p</b><span>Full HD · 4K encodes ~3–4× faster</span></label>
+              <label class="radio-opt"><input type="radio" name="res" value="720"><b>Max 720p</b><span>HD · smallest files</span></label>
+            </span>
+          </div>
+          <div class="hint" id="videoHint"></div>
+          <div id="reencWarn"></div>
+        </div>
+      </div>
+      <div class="conv-step">
+        <h3>🔊 Audio</h3>
+        <div>
+          <div class="radios" id="optAudio">
+            <label class="radio-opt"><input type="radio" name="audio" value="copy"><b>Copy</b><span>tracks as they are</span></label>
+            <label class="radio-opt"><input type="radio" name="audio" value="hard"><b>Risky → AC-3</b><span>DTS / TrueHD / FLAC / PCM</span></label>
+            <label class="radio-opt"><input type="radio" name="audio" value="all"><b>All → AC-3</b><span>every audio track</span></label>
+          </div>
+          <div class="hint">Re-encodes only the chosen tracks (fast, 1–4 threads: audio can't be split across cores). AC-3 plays on almost every TV, soundbar and phone; 7.1 becomes 5.1.</div>
+        </div>
+      </div>
+      <div class="conv-step">
+        <h3>💬 Subtitles</h3>
+        <div class="row">
+          <label class="toggle" title="ASS/SSA/WebVTT subtitles become plain SRT: no custom fonts, colours or positions"><input type="checkbox" id="optToSrt" checked> Styled subtitles → SRT</label>
+          <label class="toggle"><input type="checkbox" id="optChapters" checked> Keep chapters</label>
+        </div>
+      </div>
+      <div class="summary" id="convSummary"></div>
+    </div>
+  </section>
+
+  <section class="card hidden" id="outPanel">
+    <div class="card-head"><span class="step">4</span><h2>Output file</h2></div>
+    <div class="row">
+      <input type="text" id="outPath" placeholder="Output file">
+    </div>
+    <div class="radios sub">
+      <span class="radios-label">Container</span>
+      <span class="radios" id="optCont">
+        <label class="radio-opt"><input type="radio" name="cont" value="keep"><b>Same as source</b><span id="contSrc">keep the extension</span></label>
+        <label class="radio-opt"><input type="radio" name="cont" value="mkv"><b>MKV</b><span>holds everything: any audio, styled & image subtitles</span></label>
+        <label class="radio-opt"><input type="radio" name="cont" value="mp4"><b>MP4</b><span>plays everywhere: phones, Apple, browsers</span></label>
+      </span>
+    </div>
+    <div class="hint" id="contHint"></div>
+    <div class="opts">
+      <label class="toggle"><input type="checkbox" id="optRemux" checked> Create video file</label>
+      <label class="toggle"><input type="checkbox" id="optOverwrite"> Overwrite existing</label>
+    </div>
+    <div class="file-meta">
+      <div class="fm-head">🏷️ File title <span class="muted small">VLC shows it in the title bar and playlist instead of the filename</span></div>
+      <div class="row">
+        <input type="text" id="fileTitleIn" class="title-input" placeholder="no title">
+        <button class="x-btn" id="fileTitleClear" title="Remove title">✕</button>
+        <button class="small-btn" id="fileTitleFromName">From filename</button>
+        <button class="small-btn" id="fileTitleReset">Original</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="toggle"><input type="checkbox" id="optStripTags" checked> Remove other file tags (release names, comments…)</label>
+        <div class="chips" id="fileTags"></div>
+      </div>
+    </div>
+    <div class="srt-list" id="srtList"></div>
+  </section>
+
+  <section class="card hidden" id="recapPanel">
+    <div class="card-head"><span class="step">5</span><h2>Summary</h2><span class="muted small">what the output will contain</span></div>
+    <div id="recap"></div>
+  </section>
+
+  <section class="card hidden" id="runPanel">
+    <div class="card-head"><span class="step">6</span><h2>Run</h2></div>
+    <div class="opts" style="margin-top:0">
+      <label class="toggle"><input type="checkbox" id="optPause" checked> Pause at end (.bat)</label>
+    </div>
+    <div id="warnings"></div>
+    <div class="code-card">
+      <div class="code-head">
+        <button class="tab" data-tab="cmd">Command</button>
+        <button class="tab" data-tab="bat">.bat file</button>
+        <span class="code-hint" id="codeHint"></span>
+        <span class="code-actions">
+          <button id="dlBtn">Download .bat</button>
+          <button class="primary" id="copyBtn">Copy</button>
+        </span>
+      </div>
+      <pre id="cmd"></pre>
+      <pre id="bat"></pre>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let info = null;          // ffprobe result
+let keep = {};            // stream index -> bool
+let defaults = {};        // type -> stream index | "keep" | "none"
+let srt = {};             // subtitle stream index -> extract to .srt
+let titles = {};          // audio/subtitle stream index -> new track name
+const TYPES = ["video", "audio", "subtitle", "attachment", "data"];
+
+fetch("/list").then(r => r.json()).then(d => {
+  $("baseDir").textContent = "Base folder: " + d.dir + " · type a file or folder name (suggestions appear), paste a full path, or Browse";
+  $("files").innerHTML = d.files.map(f => `<option value="${esc(f)}">`).join("");
+});
+
+$("probeBtn").onclick = probe;
+$("browseBtn").onclick = async () => {
+  $("browseBtn").disabled = true;
+  try {
+    const d = await (await fetch("/browse?path=" + encodeURIComponent($("path").value.trim().replace(/^"|"$/g, "")))).json();
+    if (d.path) { $("path").value = d.path; probe(); }
+  } finally {
+    $("browseBtn").disabled = false;
+  }
+};
+$("path").addEventListener("keydown", e => { if (e.key === "Enter") probe(); });
+
+// ---------- Folder view: every video in a folder, its tracks and a TV verdict; names open the file view in a new tab
+const FILE_PANELS = ["streamsPanel", "convPanel", "outPanel", "recapPanel", "runPanel"];
+function showMode(mode) {
+  FILE_PANELS.forEach(id => $(id).classList.toggle("hidden", mode !== "file"));
+  $("dirPanel").classList.toggle("hidden", mode !== "dir");
+}
+let dirData = null;
+let dirSel = {};   // facet id -> Set of chosen chip values
+try { const v = localStorage.getItem("dirRecursive"); if (v !== null) $("dirRecursive").checked = v === "1"; } catch {}
+$("dirRecursive").onchange = () => {
+  try { localStorage.setItem("dirRecursive", $("dirRecursive").checked ? "1" : "0"); } catch {}
+  if (dirData) scanDir(dirData.dir);
+};
+$("browseDirBtn").onclick = async () => {
+  $("browseDirBtn").disabled = true;
+  try {
+    const d = await (await fetch("/browse_dir?path=" + encodeURIComponent($("path").value.trim().replace(/^"|"$/g, "")))).json();
+    if (d.path) { $("path").value = d.path; scanDir(d.path); }
+  } finally {
+    $("browseDirBtn").disabled = false;
+  }
+};
+$("dirAgg").onclick = e => {
+  const b = e.target.closest("[data-facet]");
+  if (!b) return;
+  const chosen = dirSel[b.dataset.facet] ??= new Set();
+  if (chosen.has(b.dataset.val)) chosen.delete(b.dataset.val);
+  else chosen.add(b.dataset.val);
+  renderDir();
+};
+$("dirClear").onclick = () => { dirSel = {}; renderDir(); };
+
+async function scanDir(path) {
+  $("err").textContent = "";
+  $("probeBtn").disabled = true;
+  showMode("dir");
+  $("dirTitle").textContent = "scanning " + path + " …";
+  $("dirAgg").innerHTML = "";
+  $("dirTable").innerHTML = "";
+  try {
+    const r = await fetch(`/scan?path=${encodeURIComponent(path)}&recursive=${$("dirRecursive").checked ? 1 : 0}`);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    if (dirData?.dir !== d.dir) dirSel = {};   // filters stay on a rescan of the same folder
+    dirData = d;
+    $("path").value = d.dir;
+    history.replaceState(null, "", "?dir=" + encodeURIComponent(d.dir));
+    document.title = baseName(d.dir) + " · Stream Picker";
+    renderDir();
+  } catch (e) {
+    $("err").textContent = e.message;
+    $("dirTitle").textContent = "";
+  } finally {
+    $("probeBtn").disabled = false;
+  }
+}
+
+function hdrClass(s) { return dvConfig(s) ? "Dolby Vision" : { smpte2084: "HDR10", "arib-std-b67": "HLG" }[s.color_transfer] || "SDR"; }
+// Long / short side, so portrait videos count like landscape ones (1080×1920 is 1080p, not 4K)
+function sides(w, h) { return [Math.max(w, h), Math.min(w, h)]; }
+function above4K(w, h) { const [long, short] = sides(w, h); return long > 3840 || short > 2160; }
+function resClass(s) {
+  const [long, short] = sides(s.width, s.height);
+  return above4K(s.width, s.height) ? "above 4K" : long >= 3000 || short >= 1600 ? "4K"
+    : long >= 1800 || short >= 1000 ? "1080p" : long >= 1200 || short >= 700 ? "720p" : "SD";
+}
+const CH_LABEL = { 1: "mono", 2: "stereo", 6: "5.1", 8: "7.1" };
+function fileLang(s) { return (s.tags?.language || "und").toLowerCase(); }
+// One verdict per file from the same TV rules as the stream table. A bad audio track only counts as
+// "maybe" when another audio track in the file plays fine (the TV can switch to it)
+function fileVerdict(f) {
+  if (f.error) return { level: "bad", issues: [{ level: "bad", text: "can't be read: " + f.error }] };
+  const av = f.streams.filter(s => !isCover(s) && (s.codec_type === "video" || s.codec_type === "audio"));
+  const audioOk = av.some(s => s.codec_type === "audio" && !tvIssues(s).length);
+  const issues = av.flatMap(s => tvIssues(s).map(i => s.codec_type === "audio" && audioOk && i.level === "bad"
+    ? { level: "maybe", text: `🔊 ${i.text} (another audio track plays)` }
+    : { level: i.level, text: (s.codec_type === "video" ? "🎞️ " : "🔊 ") + i.text }));
+  if (!av.some(s => s.codec_type === "video")) issues.push({ level: "bad", text: "no video track" });
+  return { level: issues.some(i => i.level === "bad") ? "bad" : issues.length ? "maybe" : "ok", issues };
+}
+const VERDICT = { ok: "✓ plays", maybe: "⚠️ maybe", bad: "⛔ won't play" };
+function tally(list) {
+  const m = new Map();
+  list.forEach(k => m.set(k, (m.get(k) || 0) + 1));
+  return [...m].sort((a, b) => b[1] - a[1]);
+}
+function fmtSize(b) { return b >= 1073741824 ? (b / 1073741824).toFixed(2) + " GB" : (b / 1048576).toFixed(0) + " MB"; }
+function videoOf(f) { return f.streams.find(s => s.codec_type === "video" && !isCover(s)); }
+// Subtitle languages of a file, internal + external, each once
+function subLangsOf(f) {
+  return [...new Set([...f.streams.filter(s => s.codec_type === "subtitle").map(fileLang), ...f.external_subs.map(e => e.lang || "und")])];
+}
+// Summary rows under "Folder" double as filters: chips in one row are OR-ed, rows are AND-ed.
+// keys(f) = the values a file has in that row (a file can have several audio formats or languages)
+const FACETS = [
+  { id: "tv", label: "📺 TV", keys: f => [f.verdict.level], name: v => VERDICT[v], order: ["ok", "maybe", "bad"] },
+  { id: "video", label: "🎞️ Video", keys: f => [f.v.codec_name] },
+  { id: "hdr", label: "🌈 HDR", keys: f => [hdrClass(f.v)] },
+  { id: "res", label: "📐 Resolution", keys: f => [resClass(f.v)] },
+  { id: "audio", label: "🔊 Audio", keys: f => f.streams.filter(s => s.codec_type === "audio").map(s => s.codec_name + " " + (CH_LABEL[s.channels] || s.channels + "ch")) },
+  { id: "alang", label: "🗣️ Audio languages", keys: f => f.streams.filter(s => s.codec_type === "audio").map(fileLang) },
+  { id: "subs", label: "💬 Subtitles", keys: f => subLangsOf(f).length ? subLangsOf(f) : ["none"] },
+];
+function passes(f, exceptFacet) {
+  return FACETS.every(c => c.id === exceptFacet || !dirSel[c.id]?.size || [...dirSel[c.id]].some(v => f.keys[c.id].has(v)));
+}
+
+function renderDir() {
+  const d = dirData;
+  // Unreadable files or ones without video only have a TV value
+  const files = d.files.map(f => {
+    const g = { ...f, verdict: fileVerdict(f) };
+    g.v = !f.error && videoOf(f);
+    g.keys = Object.fromEntries(FACETS.map(c => [c.id, new Set(c.id === "tv" || g.v ? c.keys(g) : [])]));
+    return g;
+  });
+  const shown = files.filter(f => passes(f));
+  const ok = shown.filter(f => !f.error);
+  const totalSize = shown.reduce((n, f) => n + f.size, 0), totalDur = ok.reduce((n, f) => n + (+f.format?.duration || 0), 0);
+  // Each chip counts the files it would show with the other rows' filters applied; chips stay even at 0
+  const facetRows = FACETS.map(c => {
+    const values = c.order || tally(files.flatMap(f => [...f.keys[c.id]])).map(([v]) => v);
+    const base = files.filter(f => passes(f, c.id));
+    const chips = values.map(v => {
+      const n = base.filter(f => f.keys[c.id].has(v)).length;
+      return `<button class="chip${dirSel[c.id]?.has(v) ? " on" : ""}${n ? "" : " zero"}" data-facet="${c.id}" data-val="${esc(v)}">${esc(c.name ? c.name(v) : v)} <b>${n}</b></button>`;
+    }).join("");
+    return `<dt>${c.label}</dt><dd>${chips || `<span class="muted">—</span>`}</dd>`;
+  }).join("");
+  const filtered = shown.length !== files.length;
+  $("dirTitle").textContent = d.dir;
+  $("dirAgg").innerHTML = `<dl class="dir-agg">
+    <dt>📦 Files</dt><dd><span class="chip"><b>${shown.length}</b>${filtered ? ` of ${files.length}` : ""} videos</span><span class="chip">${fmtSize(totalSize)}</span><span class="chip">⏱ ${fmtDur(totalDur)}</span>
+      <span class="chip" title="Files whose size and modification time didn't change since the last scan aren't read again">⚡ ${files.filter(f => f.cached).length} from cache · ${files.filter(f => !f.error && !f.cached).length} read</span>
+      ${d.truncated ? `<span class="chip">only the first ${d.limit} scanned</span>` : ""}</dd>
+    ${facetRows}
+  </dl>`;
+  $("dirCount").innerHTML = filtered ? `Showing <b>${shown.length}</b> of ${files.length}` : `<span class="muted">Click summary chips to filter</span>`;
+  $("dirClear").classList.toggle("hidden", !Object.values(dirSel).some(s => s.size));
+  const rows = shown.map(f => {
+    const folder = f.rel.includes("\\") ? f.rel.replace(/\\[^\\]*$/, "") : "";
+    const link = `<a href="?file=${encodeURIComponent(f.path)}" target="_blank" rel="noopener">${esc(baseName(f.path))}</a>
+      ${folder ? `<div class="muted small">📁 ${esc(folder)}</div>` : ""}`;
+    const issues = f.verdict.issues.map(i => `<div class="compat ${i.level}">${esc(i.text)}</div>`).join("");
+    const tv = `<span class="compat ${f.verdict.level}">${VERDICT[f.verdict.level]}</span>${issues}`;
+    if (f.error) return `<tr class="st-bad"><td>${link}</td><td>${fmtSize(f.size)}</td><td colspan="4" class="muted">—</td><td>${tv}</td></tr>`;
+    const v = f.v, br = v && videoBitrateOf(v, f);
+    const video = v ? `<span class="mono">${esc(v.codec_name)}</span> ${v.width}×${v.height}
+      ${hdrClass(v) !== "SDR" ? `<span class="hdr-tag">${esc(dvConfig(v) ? dvLabel(v) : hdrClass(v))}</span>` : ""}
+      ${br ? `<div class="muted small">${(br / 1e6).toFixed(1)} Mb/s</div>` : ""}` : `<span class="muted">—</span>`;
+    const audioCell = f.streams.filter(s => s.codec_type === "audio").map(s =>
+      `<div class="trk"><span class="lang">${esc(fileLang(s))}</span> <span class="mono">${esc(s.codec_name)}</span> ${CH_LABEL[s.channels] || s.channels + "ch"}</div>`).join("")
+      || `<span class="muted">—</span>`;
+    const inSubs = f.streams.filter(s => s.codec_type === "subtitle").map(fileLang);
+    const exSubs = f.external_subs.map(e => e.lang || "und");
+    const subsCell = `<div class="subs">${inSubs.map(l => `<span class="lang">${esc(l)}</span>`).join("") || (exSubs.length ? "" : `<span class="muted">—</span>`)}
+      ${exSubs.length ? `<div class="small"><span class="tag tag-ext">ext</span>${exSubs.map(l => `<span class="lang">${esc(l)}</span>`).join("")}</div>` : ""}</div>`;
+    return `<tr class="st-${f.verdict.level}"><td>${link}</td><td style="white-space:nowrap">${fmtSize(f.size)}</td>
+      <td>${f.format?.duration ? fmtDur(+f.format.duration) : "—"}</td><td>${video}</td><td>${audioCell}</td><td>${subsCell}</td><td>${tv}</td></tr>`;
+  });
+  $("dirTable").innerHTML = `<thead><tr><th>File</th><th>Size</th><th>Length</th><th>Video</th><th>Audio</th><th>Subtitles</th><th>TV</th></tr></thead>
+    <tbody>${rows.join("") || `<tr><td colspan="7" class="muted">${filtered ? "No videos match these filters." : "No videos in this folder."}</td></tr>`}</tbody>`;
+}
+// Video bitrate of stream s in probe result f: stream value, MKV BPS tag, or (rough) whole file minus audio
+function videoBitrateOf(s, f) {
+  const br = +s.bit_rate || +s.tags?.BPS || +s.tags?.["BPS-eng"];
+  if (br) return br;
+  const audio = f.streams.filter(a => a.codec_type === "audio").reduce((n, a) => n + (+a.bit_rate || +a.tags?.BPS || 0), 0);
+  return Math.max(0, (+f.format?.bit_rate || 0) - audio);
+}
+
+// Deep links: ?file=… opens the file view (used by the folder view's links), ?dir=… the folder view
+{
+  const q = new URLSearchParams(location.search);
+  if (q.get("file")) { $("path").value = q.get("file"); probe(); }
+  else if (q.get("dir")) { $("path").value = q.get("dir"); scanDir(q.get("dir")); }
+}
+
+// External subtitle files become pseudo-streams "x0", "x1", ... appended after the real ones
+function extStream(e) {
+  return { index: "x" + info.streams.filter(s => s.ext).length, codec_type: "subtitle", codec_name: e.codec,
+    tags: { language: e.lang || "", title: e.name }, disposition: { hearing_impaired: +e.sdh, forced: +e.forced }, ext: e };
+}
+// Any subtitle file picked by hand (names the automatic match can't pair); always shown, kept and auto-named
+$("addSubBtn").onclick = async () => {
+  if (!info) return;
+  $("addSubBtn").disabled = true;
+  $("addSubMsg").textContent = "";
+  try {
+    const r = await fetch("/browse_sub?path=" + encodeURIComponent(info.path));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    if (!d.sub) return;
+    if (info.streams.some(s => s.ext?.path.toLowerCase() === d.sub.path.toLowerCase())) {
+      $("addSubMsg").textContent = "Already in the list: " + baseName(d.sub.path);
+      return;
+    }
+    const s = extStream(d.sub);
+    info.streams.push(s);
+    keep[s.index] = true;
+    titles[s.index] = autoTitle(s);
+    render();
+  } catch (e) {
+    $("addSubMsg").textContent = e.message;
+  } finally {
+    $("addSubBtn").disabled = false;
+  }
+};
+["outPath", "optRemux", "optOverwrite", "optChapters", "optPause"].forEach(id => $(id).addEventListener("input", render));
+
+// File-level title (container tag, not a track name); undefined = keep the original
+let fileTitle;
+function origFileTitle() { return info?.format?.tags?.title || ""; }
+function outFileTitle() { return fileTitle ?? origFileTitle(); }
+function setFileTitle(v) {
+  fileTitle = v;
+  $("fileTitleIn").value = outFileTitle();
+  syncFileTitle();
+}
+function syncFileTitle() {
+  const t = outFileTitle();
+  $("fileTitleIn").className = "title-input" + (t === origFileTitle() ? "" : t ? " changed" : " changed removed");
+  $("fileTitleIn").placeholder = origFileTitle() ? "title removed" : "no title";
+  if (info) renderBat();
+}
+$("fileTitleIn").addEventListener("input", () => { fileTitle = $("fileTitleIn").value; syncFileTitle(); });
+$("fileTitleClear").onclick = () => setFileTitle("");
+$("fileTitleReset").onclick = () => setFileTitle(undefined);
+// "JamesBond-1997 Tomorrow.Never.Dies multi.remux.mkv" -> "JamesBond-1997 Tomorrow Never Dies multi"
+$("fileTitleFromName").onclick = () => setFileTitle(baseName(info.path).replace(/\.[^.]+$/, "").replace(/\.remux$/i, "").replace(/[._]+/g, " ").trim());
+try { const v = localStorage.getItem("stripTags"); if (v !== null) $("optStripTags").checked = v === "1"; } catch {}
+$("optStripTags").addEventListener("input", () => {
+  try { localStorage.setItem("stripTags", $("optStripTags").checked ? "1" : "0"); } catch {}
+  renderBat();
+});
+try { const v = localStorage.getItem("toSrt"); if (v !== null) $("optToSrt").checked = v === "1"; } catch {}
+$("optToSrt").addEventListener("input", () => {
+  try { localStorage.setItem("toSrt", $("optToSrt").checked ? "1" : "0"); } catch {}
+  render();
+});
+
+const STYLED_SUBS = ["ass", "ssa", "webvtt", "mov_text", "text"];
+function outIsMp4() { return /\.(mp4|m4v|mov)"?\s*$/i.test($("outPath").value.trim()); }
+// Styled text subtitles become plain SRT in the output video (MP4 output always uses mov_text instead)
+// MP4's own mov_text can't go into MKV at all, so it always becomes SRT there
+function toSrt(s) {
+  return !outIsMp4() && (s.codec_name === "mov_text" || $("optToSrt").checked && STYLED_SUBS.includes(s.codec_name));
+}
+
+// Output container: "Same as source" keeps the input's extension; switching only swaps the output file's
+// extension (a lossless repack). Typing another extension by hand moves the radio along
+function srcExt() { return (info.path.match(/\.([^.\\/]+)$/) || [, "mkv"])[1].toLowerCase(); }
+function contExt() { return opt("optCont") === "keep" ? srcExt() : opt("optCont"); }
+function applyContainer() {
+  const v = $("outPath").value.trim();
+  $("outPath").value = (/\.[^.\\/]+$/.test(v) ? v.replace(/\.[^.\\/]+$/, "") : v) + "." + contExt();
+}
+function syncContainer() {
+  const ext = ($("outPath").value.trim().match(/\.([^.\\/]+)$/) || [])[1]?.toLowerCase();
+  if (ext === contExt()) return;
+  setOpt("optCont", ext === srcExt() ? "keep" : ext);   // .m4v/.mov/other: no radio checked
+}
+try { setOpt("optCont", localStorage.getItem("cont") || "keep"); } catch { setOpt("optCont", "keep"); }
+if (!opt("optCont")) setOpt("optCont", "keep");
+$("optCont").addEventListener("input", () => {
+  try { localStorage.setItem("cont", opt("optCont")); } catch {}
+  if (info) { applyContainer(); render(); }
+});
+$("outPath").addEventListener("input", () => { if (info) syncContainer(); });
+
+// Radio groups (#optPreset, #optVideo, #optEnc, #optAudio): read / set the checked value.
+// Setting a value no radio has (preset "custom") leaves the group unchecked
+function opt(id) { return $(id).querySelector("input:checked")?.value || ""; }
+function setOpt(id, v) { $(id).querySelectorAll("input").forEach(r => r.checked = r.value === v); }
+const OPT_DEFAULT = { optAudio: ["audio", "copy"], optVideo: ["video", "keep"], optEnc: ["enc", "cpu"], optRes: ["res", "orig"] };
+for (const [id, [key, def]] of Object.entries(OPT_DEFAULT)) {
+  try { setOpt(id, localStorage.getItem(key) || def); } catch { setOpt(id, def); }
+  if (!opt(id)) setOpt(id, def);
+}
+// Format presets only set Video + Audio; changing either by hand leaves no preset checked ("custom")
+const PRESETS = { asis: { audio: "copy", video: "keep" }, tv: { audio: "hard", video: "strip" }, tvmax: { audio: "all", video: "strip" },
+  tvhevc: { audio: "all", video: "hevc" } };
+function syncToggles() {
+  const preset = Object.keys(PRESETS).find(k => PRESETS[k].audio === opt("optAudio") && PRESETS[k].video === opt("optVideo")) || "custom";
+  setOpt("optPreset", preset);
+  $("presetCustom").classList.toggle("hidden", preset !== "custom");
+  for (const id of ["encWrap", "resWrap"]) $(id).classList.toggle("hidden", !["hevc", "h264"].includes(opt("optVideo")));
+}
+syncToggles();
+for (const [id, [key]] of Object.entries(OPT_DEFAULT))
+  $(id).addEventListener("input", () => {
+    try { localStorage.setItem(key, opt(id)); } catch {}
+    syncToggles();
+    render();
+  });
+$("optPreset").addEventListener("input", () => {
+  const p = PRESETS[opt("optPreset")];
+  if (!p) return;
+  setOpt("optAudio", p.audio);
+  setOpt("optVideo", p.video);
+  try { localStorage.setItem("audio", p.audio); localStorage.setItem("video", p.video); } catch {}
+  syncToggles();
+  render();
+});
+
+function dvConfig(s) { return s.side_data_list?.find(d => d.side_data_type === "DOVI configuration record"); }
+function dvLabel(s) {
+  const dv = dvConfig(s);
+  return "Dolby Vision P" + dv.dv_profile + (dv.dv_bl_signal_compatibility_id ? "." + dv.dv_bl_signal_compatibility_id : "");
+}
+function hdrLabel(s) {
+  const hdr = { smpte2084: "HDR10", "arib-std-b67": "HLG" }[s.color_transfer] || "";
+  const dv = dvConfig(s);
+  return dv ? dvLabel(s) + (hdr && dv.dv_bl_signal_compatibility_id ? " + " + hdr : "") : hdr;
+}
+function isHdr(s) { return ["smpte2084", "arib-std-b67"].includes(s.color_transfer); }
+// Video re-encode: only tracks in another codec, or ones with a problem only a re-encode fixes
+const VENC = { hevc: "HEVC", h264: "H.264" };
+function reencode(s) {
+  const m = opt("optVideo");
+  return s.codec_type === "video" && !!VENC[m] && (s.codec_name !== m || tvIssues(s).some(i => i.fix === "enc") || downscaled(s));
+}
+// Resolution cap for re-encodes: fit inside the box, keep the aspect ratio. "Original" never scales
+const RES_BOX = { 2160: [3840, 2160], 1080: [1920, 1080], 720: [1280, 720] };
+function resBox() { return RES_BOX[opt("optRes")] || null; }
+// The box turned to the video's orientation: a portrait 1080×1920 already fits "Max 1080p"
+function fitBox(s) {
+  const box = resBox();
+  return box && (s.height > s.width ? [box[1], box[0]] : box);
+}
+function downscaled(s) { const box = fitBox(s); return s.codec_type === "video" && !!box && (s.width > box[0] || s.height > box[1]); }
+function outSize(s) {
+  if (!downscaled(s)) return [s.width, s.height];
+  const [w, h] = fitBox(s), f = Math.min(w / s.width, h / s.height);
+  // Same as ffmpeg: nearest even number, but never past the box (1919 → 1918)
+  const even = (v, max) => { const e = 2 * Math.round(v / 2); return e > max ? e - 2 : e; };
+  return [even(s.width * f, w), even(s.height * f, h)];
+}
+// Any mode but "copy" drops Dolby Vision; a re-encode drops it in the encoder instead.
+// Profile 5 has no HDR10 base layer: stripping would leave a purple/green picture
+function stripDv(s) { const dv = dvConfig(s); return opt("optVideo") !== "keep" && !!dv && dv.dv_profile !== 5 && !reencode(s); }
+// Encoder threads: all logical cores but 4, so the PC stays usable
+function nThreads() { return Math.max(1, (info.cpus || 8) - 4); }
+// CPU encoders give the best quality per MB; NVENC is a fixed-function chip on NVIDIA cards, ~10× faster, a bit bigger
+// at equal quality. Quality values are matched to give similar sizes (tested: x265 CRF 20 ≈ NVENC CQ 24)
+const ENCODERS = {
+  cpu: { hevc: { lib: "libx265", q: 20, label: "x265 CRF 20, preset medium" }, h264: { lib: "libx264", q: 19, label: "x264 CRF 19, preset medium" } },
+  gpu: { hevc: { lib: "hevc_nvenc", q: 24, label: "NVENC p5, CQ 24" }, h264: { lib: "h264_nvenc", q: 21, label: "NVENC p5, CQ 21" } },
+};
+function isGpu() { return opt("optEnc") === "gpu"; }
+function encoder() { return ENCODERS[opt("optEnc")][opt("optVideo")]; }
+// Source video bitrate: stream value, MKV BPS tag, or (rough) whole file minus audio
+function videoBitrate(s) { return videoBitrateOf(s, info); }
+// Reasons a re-encode of this track may do more harm than good
+function reencNotes(s) {
+  // bits/pixel against the OUTPUT size: a downscale leaves more bits per remaining pixel
+  const [ow, oh] = outSize(s), notes = [], br = videoBitrate(s), bpp = br / (ow * oh * (fps(s) || 24));
+  const name = `#${s.index} ${VENC[s.codec_name] || s.codec_name}`;
+  if (VENC[s.codec_name] && !tvIssues(s).some(i => i.fix === "enc") && !downscaled(s))
+    notes.push(`${name}: already plays on TVs, so re-encoding isn't needed for compatibility`);
+  if (br && bpp < 0.1)
+    notes.push(`${name}: already compressed hard (${(br / 1e6).toFixed(1)} Mb/s, ${bpp.toFixed(3)} bits/pixel), so the result will likely be BIGGER, not better (tested: 2 Mb/s 1080p H.264 → ~5 Mb/s HEVC)`);
+  if (opt("optVideo") === "h264" && isHdr(s))
+    notes.push(`${name}: HDR gets tone-mapped to SDR, so on an HDR TV it looks flatter than the original`);
+  return notes;
+}
+// Reasons a re-encode of this track pays off (shown when reencNotes finds nothing against it)
+function reencGood(s) {
+  const [ow, oh] = outSize(s), br = videoBitrate(s), bpp = br / (ow * oh * (fps(s) || 24));
+  const name = `#${s.index} ${VENC[s.codec_name] || s.codec_name}`, good = [];
+  if (tvIssues(s).some(i => i.fix === "enc" || i.fix === "scale")) good.push(`${name}: the TV may not play it as it is`);
+  if (br && bpp >= 0.15) good.push(`${name}: large source (${(br / 1e6).toFixed(1)} Mb/s), expect a much smaller file`);
+  if (downscaled(s)) good.push(`${name}: downscaled to ${outSize(s).join("×")}`);
+  return good;
+}
+// HDR → SDR for H.264: tone-map to BT.709 and drop the HDR metadata a TV could still react to
+const TONEMAP = "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p,"
+  + "sidedata=delete:type=MASTERING_DISPLAY_METADATA,sidedata=delete:type=CONTENT_LIGHT_LEVEL";
+function fps(s) { return s.avg_frame_rate && s.avg_frame_rate !== "0/0" ? s.avg_frame_rate.split("/").reduce((a, b) => a / b) : 0; }
+
+// TV compatibility, assuming a 4K TV playing from USB. fix = what this tool can do about it ("dv" strip, "ac3" convert)
+function tvIssues(s) {
+  const out = [], c = s.codec_name || "", pf = s.pix_fmt || "";
+  if (s.codec_type === "video") {
+    if (c === "av1") out.push({ level: "maybe", text: "AV1: only newer TVs (2020+) decode it", fix: "enc" });
+    else if (c === "vp9") out.push({ level: "maybe", text: "VP9: mostly a YouTube codec, often fails from USB", fix: "enc" });
+    else if (c === "mjpeg") out.push({ level: "maybe", text: "MJPEG (old camera video): many TVs play it, but files are 10–20× bigger than HEVC", fix: "enc" });
+    else if (c !== "h264" && c !== "hevc") out.push({ level: "maybe", text: `${c}: old or rare codec, many TVs won't play it`, fix: "enc" });
+    if (c === "h264" && /10(le|be)$/.test(pf)) out.push({ level: "bad", text: "10-bit H.264 (Hi10P): no TV decodes it", fix: "enc" });
+    if (/12(le|be)$/.test(pf)) out.push({ level: "bad", text: "12-bit video: TVs decode 8/10-bit only", fix: "enc" });
+    if (/^yuv4(22|44)/.test(pf)) out.push({ level: "bad", text: "4:2:2 / 4:4:4 colour: TVs decode 4:2:0 only", fix: "enc" });
+    if (above4K(s.width, s.height)) out.push({ level: "bad", text: `${s.width}×${s.height}: above 4K`, fix: "scale" });
+    if (fps(s) > 60) out.push({ level: "maybe", text: "over 60 fps" });
+    const dv = dvConfig(s);
+    if (dv?.dv_profile === 5)
+      out.push({ level: "bad", text: "Dolby Vision P5: no HDR10 fallback, purple/green picture on TVs without DV (can't be fixed here: strip and re-encode keep the wrong colours)" });
+    else if (dv?.dv_profile === 7)
+      out.push({ level: "maybe", text: "Dolby Vision P7 (UHD Blu-ray dual layer): often fails outside Blu-ray players", fix: "dv" });
+    else if (dv)
+      out.push({ level: "maybe", text: `${dvLabel(s)}: TVs without DV should fall back to HDR10, but some TVs/players fail on it`, fix: "dv" });
+  }
+  if (s.codec_type === "audio") {
+    if (/^(truehd|mlp)$/.test(c)) out.push({ level: "bad", text: "TrueHD: many TVs can't decode it (only pass it to a receiver)", fix: "ac3" });
+    else if (c === "dts") out.push({ level: "maybe", text: "DTS: missing on many TVs (LG 2020–21, Samsung 2018+)", fix: "ac3" });
+    else if (/^(flac|alac|pcm_)/.test(c)) out.push({ level: "maybe", text: "lossless: not every TV plays it, and wasted on TV speakers", fix: "ac3" });
+    else if (!["aac", "ac3", "eac3", "mp3", "mp2"].includes(c)) out.push({ level: "maybe", text: `${c}: spotty TV support`, fix: "ac3" });
+    if (s.channels > 6) out.push({ level: "maybe", text: `${s.channels} channels: some TVs refuse more than 5.1`, fix: "ac3" });
+  }
+  return out;
+}
+function isFixed(s, fix) {
+  if (!$("optRemux").checked || !keep[s.index]) return false;
+  if (fix === "scale") return reencode(s) && !above4K(...outSize(s));
+  return fix === "dv" ? stripDv(s) || reencode(s) : fix === "enc" ? reencode(s) : fix === "ac3" && toAc3(s);
+}
+const FIX_HINT = { dv: "🎞️ Video → drop Dolby Vision", enc: "🎞️ Video → re-encode HEVC / H.264",
+  scale: "🎞️ Video → re-encode, Resolution: Max 4K or lower", ac3: "🔊 Audio → AC-3" };
+// What the output turns this track into, for "fixed (→ …)"
+function fixedAs(s) {
+  if (s.codec_type === "audio") return "AC-3";
+  return reencode(s) ? VENC[opt("optVideo")] + (downscaled(s) ? " " + outSize(s).join("×") : "") : "HDR10";
+}
+function compatHtml(s) {
+  if (s.codec_type !== "video" && s.codec_type !== "audio") return "";
+  const issues = tvIssues(s);
+  if (!issues.length) return `<div class="compat ok">✓ TV safe</div>`;
+  return issues.map(i => isFixed(s, i.fix)
+    ? `<div class="compat ok">✓ fixed (→ ${fixedAs(s)}): ${esc(i.text)}</div>`
+    : `<div class="compat ${i.level}">${i.level === "bad" ? "⛔" : "⚠️"} ${esc(i.text)}${i.fix ? ` <span class="muted">· fix: ${FIX_HINT[i.fix]}</span>` : ""}</div>`).join("");
+}
+
+const HARD_AUDIO = /^(dts|truehd|mlp|flac|pcm_|alac|opus|vorbis)/;
+// Audio tracks re-encoded to AC-3 ("hard" = formats many TVs/phones can't play)
+function toAc3(s) {
+  const mode = opt("optAudio");
+  return s.codec_type === "audio" && s.codec_name !== "ac3" && (mode === "all" || (mode === "hard" && HARD_AUDIO.test(s.codec_name)));
+}
+function ac3Bitrate(s) { return (s.channels || 2) > 2 ? "640k" : "224k"; }
+
+const LANG_NAME = { eng: "English", en: "English", cze: "Czech", ces: "Czech", cs: "Czech", slo: "Slovak", slk: "Slovak",
+  ger: "German", deu: "German", fre: "French", fra: "French", spa: "Spanish", ita: "Italian", pol: "Polish",
+  rus: "Russian", hun: "Hungarian", por: "Portuguese", jpn: "Japanese", ukr: "Ukrainian", dut: "Dutch", nld: "Dutch",
+  swe: "Swedish", fin: "Finnish", dan: "Danish", nob: "Norwegian", nor: "Norwegian", tur: "Turkish", gre: "Greek",
+  ell: "Greek", ara: "Arabic", heb: "Hebrew", rum: "Romanian", ron: "Romanian", hrv: "Croatian", tha: "Thai",
+  vie: "Vietnamese", ind: "Indonesian", may: "Malay", msa: "Malay", kor: "Korean", chi: "Chinese", zho: "Chinese",
+  fil: "Filipino", bul: "Bulgarian", srp: "Serbian", slv: "Slovenian", hin: "Hindi" };
+const PICK_LANG = ["cze", "eng"];   // language switch for fuzzy-matched subtitles
+function langName(s) { return LANG_NAME[(s.tags?.language || "").toLowerCase()] || ""; }
+// External files have no title in the output unless one is set
+function origTitle(s) { return s.ext ? "" : (s.tags?.title || ""); }
+function trackTitle(s) { return titles[s.index] ?? origTitle(s); }
+function titleClass(s) {
+  const t = trackTitle(s);
+  return "title-input" + (t === origTitle(s) ? "" : t ? " changed" : " changed removed");
+}
+// Characters that would break the quoted argument in cmd/PowerShell are dropped
+function cleanTitle(t) { return t.replace(/["`$]/g, "").trim(); }
+// Suggested name: language + channels for audio, language + SDH/forced for subtitles
+function autoTitle(s) {
+  const lang = (s.tags?.language || "").toLowerCase();
+  const parts = [LANG_NAME[lang] || (lang && lang !== "und" ? lang.toUpperCase() : "Unknown")];
+  if (s.codec_type === "audio") {
+    const ch = { 1: "Mono", 2: "Stereo", 6: "5.1", 8: "7.1" }[toAc3(s) ? Math.min(s.channels, 6) : s.channels];
+    if (ch) parts.push(ch);
+  }
+  if (s.disposition?.hearing_impaired) parts.push("(SDH)");
+  if (s.disposition?.forced) parts.push("(Forced)");
+  if (s.disposition?.comment || /comment/i.test(s.tags?.title || "")) parts.push("(Commentary)");
+  return parts.join(" ");
+}
+$("langBtn").onclick = applyLangs;
+$("langs").addEventListener("keydown", e => { if (e.key === "Enter") applyLangs(); });
+try { $("langs").value = localStorage.getItem("langs") || ""; } catch {}
+
+// Audio/subtitle streams with a language tag are kept only if it's in the list; untagged ones are untouched
+function applyLangs() {
+  const want = $("langs").value.toLowerCase().split(/[\s,;]+/).filter(Boolean);
+  try { localStorage.setItem("langs", $("langs").value); } catch {}
+  if (!info || !want.length) return;
+  for (const s of info.streams) {
+    const lang = (s.tags?.language || "").toLowerCase();
+    if ((s.codec_type === "audio" || s.codec_type === "subtitle") && lang && lang !== "und" && visible(s))
+      keep[s.index] = want.includes(lang);
+  }
+  for (const t in defaults) if (defaults[t] !== "keep" && defaults[t] !== "none" && !keep[defaults[t]]) defaults[t] = "keep";
+  render();
+}
+
+let tab = "cmd";
+try { tab = localStorage.getItem("tab") || "cmd"; } catch {}
+function setTab(t) {
+  tab = t;
+  try { localStorage.setItem("tab", t); } catch {}
+  $("cmd").classList.toggle("hidden", t !== "cmd");
+  $("bat").classList.toggle("hidden", t !== "bat");
+  $("dlBtn").classList.toggle("hidden", t !== "bat");
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === t));
+  $("codeHint").textContent = t === "cmd" ? "paste into cmd or PowerShell" : "save and double-click";
+}
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+setTab(tab);
+$("copyBtn").onclick = () => navigator.clipboard.writeText($(tab).textContent).then(() => flash($("copyBtn")));
+try { const v = localStorage.getItem("enCz"); if (v !== null) $("optEnCz").checked = v === "1"; } catch {}
+$("optEnCz").onchange = () => {
+  try { localStorage.setItem("enCz", $("optEnCz").checked ? "1" : "0"); } catch {}
+  applyEnCz(); render();
+};
+
+const EN_CZ = ["eng", "en", "cze", "ces", "cs"];
+// Cover images (attached_pic) are always dropped: a stream copy turns them into a real 2nd video track,
+// which makes VLC lose the subtitles. With the EN+CZ option on, other subtitles (untagged too) are dropped too.
+function isCover(s) {
+  return !!s.disposition?.attached_pic || (s.codec_type === "video" && /^(mjpeg|png|bmp|gif|webp)$/.test(s.codec_name)
+    && !!(s.tags?.mimetype || s.tags?.MIMETYPE));   // cover already broken into a video track by an earlier copy
+}
+function visible(s) {
+  if (isCover(s)) return false;
+  if (s.ext?.match === "manual") return true;   // picked by hand: never filtered out
+  if (!$("optEnCz").checked || s.codec_type !== "subtitle") return true;
+  const lang = (s.tags?.language || "").toLowerCase();
+  return EN_CZ.includes(lang) || (s.ext && !lang);   // external file with unknown language: let the user decide
+}
+function applyEnCz() {
+  if (!info) return;
+  for (const s of info.streams) {
+    if (s.codec_type !== "subtitle") continue;
+    keep[s.index] = visible(s);
+    if (!visible(s)) delete srt[s.index];
+  }
+  if (defaults.subtitle && !["keep", "none"].includes(defaults.subtitle) && !keep[defaults.subtitle]) defaults.subtitle = "keep";
+}
+$("dlBtn").onclick = () => {
+  const blob = new Blob([$("bat").textContent.replace(/\n/g, "\r\n")], { type: "application/octet-stream" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = baseName(info.path).replace(/\.[^.]+$/, "") + ".remux.bat";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function baseName(p) { return p.split(/[\\/]/).pop(); }
+function flash(btn) {
+  btn.textContent = "✓ Copied"; btn.classList.add("done");
+  setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("done"); }, 1500);
+}
+function typeOf(s) { return TYPES.includes(s.codec_type) ? s.codec_type : "data"; }
+
+async function probe() {
+  $("err").textContent = "";
+  const p = $("path").value.trim();
+  if (!p) return;
+  $("probeBtn").disabled = true;
+  try {
+    const r = await fetch("/probe?path=" + encodeURIComponent(p));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    if (d.dir) { $("probeBtn").disabled = false; return scanDir(d.path); }
+    info = d;
+    showMode("file");
+    history.replaceState(null, "", "?file=" + encodeURIComponent(d.path));
+    document.title = baseName(d.path) + " · Stream Picker";
+    (d.external_subs || []).forEach(e => d.streams.push(extStream(e)));
+    keep = {}; defaults = {}; srt = {}; titles = {};
+    d.streams.forEach(s => keep[s.index] = !isCover(s));
+    // External .srt files carry no track name: start them with the auto name (English, Czech, …)
+    d.streams.filter(s => s.ext).forEach(s => titles[s.index] = autoTitle(s));
+    applyEnCz();
+    $("outPath").value = d.path.replace(/(\.[^.\\/]+)$/, ".remux$1");
+    $("contSrc").textContent = "keep ." + srcExt();
+    applyContainer();
+    setFileTitle(undefined);
+    $("fileTitle").textContent = baseName(d.path);
+    const f = d.format || {};
+    $("fileInfo").innerHTML = [f.format_long_name, f.duration && "⏱ " + fmtDur(+f.duration),
+      f.size && (f.size / 1048576 > 1024 ? (f.size / 1073741824).toFixed(2) + " GB" : (f.size / 1048576).toFixed(1) + " MB"),
+      (d.chapters || []).length + " chapters", d.streams.length + " streams"].filter(Boolean).map(x => `<span class="chip">${esc(x)}</span>`).join("");
+    render();
+  } catch (e) {
+    $("err").textContent = e.message;
+  } finally {
+    $("probeBtn").disabled = false;
+  }
+}
+
+function fmtDur(s) {
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = Math.floor(s % 60);
+  return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function details(s) {
+  const t = s.tags || {};
+  const parts = [];
+  if (s.codec_type === "video") parts.push(`${s.width}×${s.height}`, fps(s) ? fps(s).toFixed(3).replace(/\.?0+$/, "") + " fps" : "", s.pix_fmt, hdrLabel(s));
+  if (s.codec_type === "audio") parts.push(s.channel_layout || (s.channels + " ch"), s.sample_rate && (s.sample_rate / 1000) + " kHz");
+  if (s.codec_type === "attachment") parts.push(t.filename, t.mimetype);
+  if (s.ext) parts.push(s.ext.match === "fuzzy" ? `external file, ≈ similar name (${Math.round(s.ext.score * 100)}% of title words)`
+    : s.ext.match === "manual" ? "external file, added by hand" : "external file", s.ext.charenc && `${s.ext.charenc} → converted to UTF-8`);
+  const br = s.bit_rate || t.BPS || t["BPS-eng"];
+  if (br >= 1000) parts.push(Math.round(br / 1000) + " kb/s");
+  return parts.filter(Boolean).join(", ");
+}
+
+const TYPE_ICON = { video: "🎞️", audio: "🔊", subtitle: "💬", attachment: "📎", data: "🧩" };
+const FLAG_LABEL = { default: "default", forced: "forced", hearing_impaired: "SDH", comment: "commentary" };
+
+function render() {
+  if (!info) return;
+  const html = [`<thead><tr><th>Keep</th><th>#</th><th>Codec</th><th>Lang</th><th>Title</th><th>Details</th><th>Flags</th><th>Default</th><th>→ .srt</th></tr></thead>`];
+  for (const type of TYPES) {
+    const all = info.streams.filter(s => typeOf(s) === type);
+    if (!all.length) continue;
+    const list = all.filter(visible);
+    const hidden = all.filter(s => !visible(s));
+    const canDefault = type === "audio" || type === "subtitle";
+    const canName = canDefault || type === "video";
+    const keptN = all.filter(s => keep[s.index]).length;
+    const outOrder = all.filter(s => keep[s.index]).sort((a, b) => outputRank(a) - outputRank(b));
+    html.push(`<tbody data-type="${type}"><tr class="group-head"><td colspan="9"><div class="gh">
+      <span class="gh-title">${TYPE_ICON[type]} ${type}</span>
+      <span class="count">${keptN} of ${all.length} kept</span>
+      <span class="gh-tools">
+        <span class="seg"><button data-all="${type}">All</button><button data-none="${type}">None</button></span>
+        ${canDefault ? `<span class="seg-label">Default:</span>
+          <label class="radio-chip"><input type="radio" name="def-${type}" value="keep" ${(defaults[type] ?? "keep") === "keep" ? "checked" : ""}> as is</label>
+          <label class="radio-chip"><input type="radio" name="def-${type}" value="none" ${defaults[type] === "none" ? "checked" : ""}> none</label>` : ""}
+        ${type === "subtitle" ? `<span class="seg-label">.srt:</span>
+          <span class="seg"><button data-srt-kept>Kept</button><button data-srt-none>None</button></span>` : ""}
+        ${canName ? `<span class="seg-label">Names:</span>
+          <span class="seg">${canDefault ? `<button data-autoname="${type}" title="English, Czech (SDH), English 5.1, …">Auto</button>` : ""}<button data-clearname="${type}" title="Remove the names of all kept ${type} tracks">Clear</button><button data-resetname="${type}">Original</button></span>` : ""}
+      </span></div></td></tr>`);
+    const extCount = list.filter(s => s.ext).length;
+    if (extCount)
+      html.push(`<tr class="note-row"><td colspan="9"><div class="ext-note">📎 Found <b>${extCount}</b> subtitle file${extCount > 1 ? "s" : ""} next to the video (marked <span class="tag tag-ext">ext</span>). Ticked ones get packed into the output file.</div></td></tr>`);
+    for (const s of list) {
+      const t = s.tags || {};
+      const disp = s.disposition || {};
+      const flags = Object.keys(FLAG_LABEL).filter(k => disp[k]).map(k => `<span class="tag flag-${k}">${FLAG_LABEL[k]}</span>`).join("");
+      html.push(`<tr class="${keep[s.index] ? "" : "off"}">
+        <td><input type="checkbox" data-keep="${s.index}" ${keep[s.index] ? "checked" : ""}></td>
+        <td class="idx">${s.ext ? `<span class="tag tag-ext">ext</span>` : s.index}</td>
+        <td class="mono">${esc(s.codec_name)}${keep[s.index] && $("optRemux").checked && (toSrt(s) || toAc3(s) || stripDv(s) || reencode(s))
+          ? ` <span class="conv">→ ${toSrt(s) ? "srt" : toAc3(s) ? "ac3 " + ac3Bitrate(s) : reencode(s) ? opt("optVideo") + " (re-encode)" : "HDR10"}</span>` : ""}</td>
+        <td>${s.ext?.match === "fuzzy" ? `<span class="seg lang-seg">${PICK_LANG.map(code =>
+            `<button data-setlang="${s.index}" data-lang="${code}" class="${t.language === code ? "on" : ""}">${code}</button>`).join("")}</span>`
+          : t.language ? `<span class="lang">${esc(t.language)}</span>` : `<span class="muted">—</span>`}</td>
+        <td class="title">${canName && keep[s.index] && $("optRemux").checked
+          ? `<div class="title-wrap"><input type="text" class="${titleClass(s)}" data-title="${s.index}" value="${esc(trackTitle(s))}"
+              placeholder="${origTitle(s) ? "name removed" : "no name"}"><button class="x-btn" data-cleartitle="${s.index}" title="Remove name">✕</button>${canDefault && langName(s)
+              ? `<button class="x-btn lang-btn" data-langname="${s.index}" title="Name this track by its language code (${esc(s.tags.language)})">${langName(s)}</button>` : ""}</div>
+              ${s.ext ? `<div class="muted small">${esc(t.title)}</div>` : ""}`
+          : esc(t.title)}</td>
+        <td class="muted small">${esc(details(s))}${compatHtml(s)}</td>
+        <td>${flags}</td>
+        <td class="def">${canDefault ? `<input type="radio" name="def-${type}" value="${s.index}" ${defaults[type] == s.index ? "checked" : ""} ${keep[s.index] ? "" : "disabled"}>` : ""}${type === "subtitle" && keep[s.index] && $("optRemux").checked
+          ? ` <span class="muted small" style="white-space:nowrap">track ${outOrder.indexOf(s) + 1}</span>` : ""}</td>
+        <td class="srt">${type !== "subtitle" || s.ext ? "" : BITMAP_SUBS.includes(s.codec_name)
+          ? `<span class="muted small" title="Image subtitles can't be converted to .srt">image</span>`
+          : `<input type="checkbox" data-srt="${s.index}" ${srt[s.index] ? "checked" : ""}>`}</td></tr>`);
+    }
+    if (hidden.length)
+      html.push(`<tr class="note-row"><td colspan="9"><div class="hidden-note">🚫 ${hidden.length} hidden, always dropped (${type === "subtitle"
+        ? "not English/Czech" : "cover image: a copy would become a 2nd video track and break subtitles in VLC"}): ${hidden.map(s =>
+        esc(s.tags?.filename || s.tags?.FILENAME || s.tags?.title || s.tags?.language || "untagged #" + s.index)).join(", ")}</div></td></tr>`);
+    html.push(`</tbody>`);
+  }
+  $("streams").innerHTML = html.join("");
+  $("streams").querySelectorAll("[data-keep]").forEach(el => el.onchange = () => {
+    keep[el.dataset.keep] = el.checked;
+    for (const t in defaults) if (defaults[t] === el.dataset.keep && !el.checked) defaults[t] = "keep";
+    render();
+  });
+  $("streams").querySelectorAll("[data-all],[data-none]").forEach(el => el.onclick = () => {
+    const type = el.dataset.all || el.dataset.none;
+    info.streams.filter(s => typeOf(s) === type && visible(s)).forEach(s => keep[s.index] = !!el.dataset.all);
+    render();
+  });
+  // Typing only refreshes the command, so the input keeps focus
+  $("streams").querySelectorAll("[data-title]").forEach(el => el.oninput = () => {
+    titles[el.dataset.title] = el.value;
+    el.className = titleClass(info.streams.find(s => String(s.index) === el.dataset.title));
+    renderBat();
+  });
+  $("streams").querySelectorAll("[data-cleartitle]").forEach(el => el.onclick = () => { titles[el.dataset.cleartitle] = ""; render(); });
+  $("streams").querySelectorAll("[data-langname]").forEach(el => el.onclick = () => { titles[el.dataset.langname] = el.textContent; render(); });
+  // Fuzzy-matched subtitle: language picked by hand; an untouched auto name follows the new language
+  $("streams").querySelectorAll("[data-setlang]").forEach(el => el.onclick = () => {
+    const s = info.streams.find(x => String(x.index) === el.dataset.setlang);
+    const followName = (titles[s.index] ?? "") === autoTitle(s);
+    s.tags.language = s.ext.lang = el.dataset.lang;
+    if (followName) titles[s.index] = autoTitle(s);
+    render();
+  });
+  $("streams").querySelectorAll("[data-autoname],[data-clearname],[data-resetname]").forEach(el => el.onclick = () => {
+    const type = el.dataset.autoname || el.dataset.clearname || el.dataset.resetname;
+    info.streams.filter(s => s.codec_type === type && keep[s.index]).forEach(s => {
+      if (el.dataset.autoname) titles[s.index] = autoTitle(s);
+      else if (el.dataset.clearname) titles[s.index] = "";
+      else delete titles[s.index];
+    });
+    render();
+  });
+  $("streams").querySelectorAll("[data-srt]").forEach(el => el.onchange = () => { srt[el.dataset.srt] = el.checked; renderBat(); });
+  $("streams").querySelectorAll("[data-srt-kept],[data-srt-none]").forEach(el => el.onclick = () => {
+    srt = {};
+    if ("srtKept" in el.dataset)
+      info.streams.filter(s => s.codec_type === "subtitle" && keep[s.index] && !s.ext && !BITMAP_SUBS.includes(s.codec_name)).forEach(s => srt[s.index] = true);
+    render();
+  });
+  $("streams").querySelectorAll("input[type=radio]").forEach(el => el.onchange = () => {
+    defaults[el.name.slice(4)] = el.value; render();
+  });
+  renderBat();
+}
+
+// Paths are kept as {path} so each output can quote them: % must be doubled inside .bat files only
+const P = path => ({ path });
+function joinArgs(args, bat) {
+  return args.map(a => typeof a === "string" ? a : '"' + (bat ? a.path.replace(/%/g, "%%") : a.path) + '"').join(" ");
+}
+
+const BITMAP_SUBS = ["hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle", "xsub"];
+const LANG2 = { eng: "en", cze: "cs", ces: "cs", slo: "sk", slk: "sk", ger: "de", deu: "de", fre: "fr", fra: "fr",
+  spa: "es", ita: "it", pol: "pl", rus: "ru", ukr: "uk", por: "pt", dut: "nl", nld: "nl", hun: "hu", swe: "sv",
+  fin: "fi", dan: "da", nob: "no", nor: "no", tur: "tr", gre: "el", ell: "el", ara: "ar", heb: "he", rum: "ro",
+  ron: "ro", hrv: "hr", tha: "th", vie: "vi", ind: "id", may: "ms", msa: "ms", jpn: "ja", kor: "ko", chi: "zh", zho: "zh" };
+
+// <video name>-<lang>[-sdh][-forced].srt in `dir`; duplicates get -2, -3, ...
+function srtNames(dir) {
+  const base = baseName(info.path).replace(/\.[^.]+$/, "");
+  const used = {}, names = {};
+  for (const s of info.streams.filter(s => srt[s.index])) {
+    const t = s.tags || {}, d = s.disposition || {};
+    const lang = (t.language || "").toLowerCase();
+    let suf = LANG2[lang] || (lang && lang !== "und" ? lang : "sub" + s.index);
+    if (d.hearing_impaired || /\bSDH\b/i.test(t.title || "")) suf += "-sdh";
+    if (d.forced || /\bforced\b/i.test(t.title || "")) suf += "-forced";
+    let name = suf, n = 2;
+    while (used[name]) name = suf + "-" + n++;
+    used[name] = true;
+    names[s.index] = dir + base + "-" + name + ".srt";
+  }
+  return names;
+}
+
+// Output order: grouped by type, default subtitle first so it becomes subtitle track 1
+function isDefaultSub(s) {
+  const d = defaults.subtitle ?? "keep";
+  return d === "keep" ? !!s.disposition?.default : String(s.index) === d;
+}
+function outputRank(s) { return TYPES.indexOf(typeOf(s)) * 2 + (s.codec_type === "subtitle" && !isDefaultSub(s) ? 1 : 0); }
+
+function renderBat() {
+  const kept = info.streams.filter(s => keep[s.index]).sort((a, b) => outputRank(a) - outputRank(b));
+  const out = $("outPath").value.trim().replace(/^"|"$/g, "");
+  const outExt = (out.match(/\.([^.\\/]+)$/) || [])[1]?.toLowerCase() || "";
+  const remux = $("optRemux").checked;
+  const args = ["-hide_banner"];
+  if ($("optOverwrite").checked) args.push("-y");
+  // Decoding/filtering a re-encoded video gets the same thread budget as the encoder (cores − 4)
+  if (remux && kept.some(reencode)) args.push("-threads", String(nThreads()), "-filter_threads", String(nThreads()));
+  args.push("-i", P(info.path));
+  const warnings = [];
+  $("convSummary").textContent = "";
+  $("contHint").textContent = "";
+  $("convPanel").classList.toggle("off", !remux);
+
+  if (remux) {
+    // External subtitle files are extra inputs 1, 2, ...; -sub_charenc must precede its -i
+    const extInput = {};
+    kept.filter(s => s.ext).forEach((s, i) => {
+      extInput[s.index] = i + 1;
+      if (s.ext.charenc) args.push("-sub_charenc", s.ext.charenc);
+      args.push("-i", P(s.ext.path));
+    });
+    kept.forEach(s => args.push("-map", s.ext ? extInput[s.index] + ":0" : "0:" + s.index));
+    if (!$("optChapters").checked) args.push("-map_chapters", "-1");
+    args.push("-c", "copy");
+
+    const isMp4 = ["mp4", "m4v", "mov"].includes(outExt);
+    const isAvi = outExt === "avi";
+    const keptSubs = kept.filter(s => s.codec_type === "subtitle");
+    const family = ext => ["mp4", "m4v", "mov"].includes(ext) ? "mp4" : ext === "avi" ? "avi" : "mkv";
+    $("contHint").textContent = isAvi
+      ? "AVI is a 1990s container: no subtitles, chapters or track languages, and no proper HEVC/H.264. Fine for keeping old camera or Xvid videos as they are; for anything else choose MKV or MP4."
+      : family(outExt) === family(srcExt()) ? "Same kind of container as the source."
+      : isMp4 ? "Repack into MP4: lossless and fast. Subtitles become plain mov_text (no styling); image subtitles, fonts and TrueHD audio can't go in (see step 6)."
+      : "Repack into MKV: lossless and fast." + (family(srcExt()) === "mp4" ? " MP4 subtitles (mov_text) become SRT." : "");
+    // AVI: ffmpeg can't write subtitles into it, and modern codecs come out unreadable ("rawvideo")
+    if (isAvi && keptSubs.length)
+      warnings.push("AVI can't hold subtitles: ffmpeg will stop. Choose MKV or MP4 in step 4, or untick the subtitles.");
+    if (isAvi && kept.some(s => s.codec_type === "video" && (reencode(s) || ["hevc", "h264", "av1", "vp9"].includes(s.codec_name))))
+      warnings.push("AVI can't store HEVC / H.264 properly: players would see broken video. Choose MKV or MP4 in step 4.");
+    if (isMp4 && keptSubs.length) {
+      if (keptSubs.some(s => BITMAP_SUBS.includes(s.codec_name)))
+        warnings.push("MP4 can't hold image subtitles (PGS/VobSub). Use .mkv output or drop them.");
+      args.push("-c:s", "mov_text");
+    }
+    // Audio → AC-3 for the chosen tracks only; AC-3 tops out at 5.1 channels and 48 kHz
+    kept.filter(s => s.codec_type === "audio").forEach((s, k) => {
+      if (!toAc3(s)) return;
+      args.push(`-c:a:${k}`, "ac3", `-b:a:${k}`, ac3Bitrate(s));
+      if (s.channels > 6) args.push(`-ac:a:${k}`, "6");
+      if (+s.sample_rate > 48000) args.push(`-ar:a:${k}`, "48000");
+    });
+    // Dolby Vision → HDR10 without re-encoding: the bitstream filter drops the RPU and the DV config record.
+    // Re-encode: HEVC stays 10-bit and keeps HDR10 (colour tags + mastering metadata pass through, DV off;
+    // NVENC never writes DV). H.264 is 8-bit, so HDR gets tone-mapped to SDR.
+    // x265 takes threads via pools (-threads would set frame threads, max 16); NVENC needs no CPU threads
+    // MP4 copy: HEVC needs the hvc1 tag (ffmpeg's default hev1 is refused by Apple/some TVs). Kept Dolby Vision
+    // also needs -strict unofficial, else ffmpeg leaves out its config record and players see plain HDR10
+    let mp4Dv = false;
+    kept.filter(s => s.codec_type === "video").forEach((s, k) => {
+      if (stripDv(s)) args.push(`-bsf:v:${k}`, "dovi_rpu=strip=1");
+      // Xvid/DivX "packed B-frames" are an AVI-only hack: unpack them when copying into MKV/MP4
+      if (!isAvi && !reencode(s) && s.codec_name === "mpeg4") args.push(`-bsf:v:${k}`, "mpeg4_unpack_bframes");
+      if (isMp4 && !reencode(s) && s.codec_name === "hevc") {
+        const dv = !stripDv(s) && dvConfig(s);
+        args.push(`-tag:v:${k}`, dv?.dv_profile === 5 ? "dvh1" : "hvc1");
+        mp4Dv ||= !!dv;
+      }
+      if (!reencode(s)) return;
+      const o = (name, val) => args.push(`-${name}:v:${k}`, String(val));
+      const hevc = opt("optVideo") === "hevc", vf = downscaled(s)
+        ? [`scale=${fitBox(s).join(":")}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos`] : [];
+      // Full-range video (MJPEG cameras, yuvj*): convert to TV range, many TVs ignore the full-range flag
+      // and would crush the shadows and clip the highlights
+      if (s.color_range === "pc" || /^yuvj/.test(s.pix_fmt || "")) {
+        vf.unshift("scale=in_range=full:out_range=limited");
+        o("color_range", "tv");
+      }
+      o("c", encoder().lib);
+      if (isGpu()) {
+        o("preset", "p5"); o("tune", "hq"); o("rc", "vbr"); o("cq", encoder().q); o("b", 0); o("spatial-aq", 1); o("temporal-aq", 1);
+      } else {
+        o("preset", "medium"); o("crf", encoder().q);
+        if (hevc) o("x265-params", "pools=" + nThreads());
+        else o("threads", nThreads());
+      }
+      if (hevc) {
+        o("pix_fmt", isGpu() ? "p010le" : "yuv420p10le");
+        if (!isGpu()) o("dolbyvision", 0);
+        if (isMp4) o("tag", "hvc1");   // MP4: hvc1 tag, else Apple/some TVs refuse it
+      } else if (isHdr(s)) vf.push(TONEMAP);
+      else o("pix_fmt", "yuv420p");
+      if (vf.length) args.push(`-filter:v:${k}`, P(vf.join(",")));
+    });
+    if (mp4Dv) args.push("-strict", "unofficial");
+    // Audio MP4 can't hold (TrueHD: ffmpeg refuses) or that MP4 players rarely play
+    if (isMp4) kept.filter(s => s.codec_type === "audio" && !toAc3(s)).forEach(s => {
+      if (/^(truehd|mlp)$/.test(s.codec_name))
+        warnings.push(`MP4 can't hold TrueHD audio (#${s.index}): ffmpeg will stop. Set 🔊 Audio → AC-3, drop the track, or keep MKV.`);
+      else if (/^(dts|flac|pcm_)/.test(s.codec_name))
+        warnings.push(`${s.codec_name.toUpperCase()} audio in MP4 (#${s.index}) plays on few devices. Set 🔊 Audio → AC-3 or keep MKV.`);
+    });
+    // Unfixed ⛔ TV problems of kept tracks (⚠️ ones stay in the table only)
+    kept.filter(s => s.codec_type === "video" || s.codec_type === "audio").forEach(s =>
+      tvIssues(s).filter(i => i.level === "bad" && !isFixed(s, i.fix)).forEach(i =>
+        warnings.push(`TV: ${s.codec_type} #${s.index} (${s.codec_name}) — ${i.text}${i.fix ? ". Fix: " + FIX_HINT[i.fix] : ""}`)));
+    // Track names: written only when changed (a stream copy keeps the original title)
+    for (const [type, spec] of [["video", "v"], ["audio", "a"], ["subtitle", "s"]])
+      kept.filter(s => s.codec_type === type).forEach((s, k) => {
+        const title = cleanTitle(trackTitle(s));   // empty value = name removed
+        if (title !== origTitle(s)) args.push(`-metadata:s:${spec}:${k}`, P("title=" + title));
+      });
+    // Re-encode when converting to SRT, or when an external file's charset is converted (a stream copy would skip it)
+    const SUB_ENC = { subrip: "srt", ass: "ass", webvtt: "webvtt" };
+    keptSubs.forEach((s, k) => {
+      const enc = isMp4 ? null : toSrt(s) ? "srt" : s.ext?.charenc ? SUB_ENC[s.codec_name] : null;
+      if (enc) args.push(`-c:s:${k}`, enc);
+      if (!s.ext) return;
+      if (s.ext.lang) args.push(`-metadata:s:s:${k}`, "language=" + s.ext.lang);
+      const flags = ["forced", "hearing_impaired"].filter(f => s.disposition[f]);
+      if ((defaults.subtitle ?? "keep") === "keep" && flags.length) args.push(`-disposition:s:${k}`, flags.join("+"));
+    });
+    if (isMp4 && kept.some(s => s.codec_type === "attachment"))
+      warnings.push("MP4 can't hold attachments (fonts). Use .mkv output or drop them.");
+    // What really happens per type: copied or re-encoded
+    const keptOf = type => kept.filter(s => s.codec_type === type);
+    const nAc3 = keptOf("audio").filter(toAc3).length, nSrt = keptSubs.filter(toSrt).length;
+    const enc = keptOf("video").filter(reencode), mode = opt("optVideo");
+    const where = isGpu() ? "NVIDIA GPU" : `${nThreads()} of ${info.cpus} CPU threads`;
+    const videoNote = enc.length
+      ? `🎞️ video RE-ENCODED → ${mode === "hevc" ? "HEVC 10-bit" : "H.264 8-bit"} (${encoder().label}, ${where}`
+        + (enc.some(isHdr) ? (mode === "hevc" ? ", HDR10 kept" : ", HDR tone-mapped to SDR") : "")
+        + (enc.some(downscaled) ? `, downscaled to ${enc.filter(downscaled).map(s => outSize(s).join("×")).join(" / ")}` : "") + ")"
+        + (enc.some(dvConfig) ? ", Dolby Vision dropped" : "") + (isGpu() ? "" : ", slow")
+      : "🎞️ video copied" + (keptOf("video").some(stripDv) ? ", Dolby Vision metadata dropped (picture untouched)" : "");
+    // Step 3 hints: what the chosen video mode does, and why a re-encode may be a bad idea for this file
+    $("videoHint").textContent = !VENC[mode]
+      ? "Picture copied bit-for-bit, takes minutes (mostly disk speed)." + (mode === "strip"
+        ? " Only the Dolby Vision metadata is removed, leaving plain HDR10 (Profile 5 is skipped: it has no HDR10 layer)." : "")
+      : `Re-encode with ${encoder().label}, ` + (isGpu()
+        ? "on the NVIDIA GPU: ~15× realtime at 1080p, CPU stays mostly free (needs an NVIDIA card)."
+        : `on ${nThreads()} of ${info.cpus} CPU threads: ~1–1.5× realtime at 1080p, slower in 4K.`)
+        + ` Tracks already in ${VENC[mode]} are only copied, unless the TV can't play them.`
+        + (keptOf("video").length && !enc.length ? ` This file's video is already ${VENC[mode]}${resBox()
+          ? " and within the resolution limit" : ""}, so nothing gets re-encoded.` : "");
+    // No reasons against it: say why this re-encode is worth it instead of the generic warning
+    const notes = enc.flatMap(reencNotes), good = enc.flatMap(reencGood);
+    $("reencWarn").innerHTML = !enc.length ? "" : notes.length || !good.length ? `<div class="warn">⚠️ <b>Re-encoding can do more harm than good.</b> It always loses
+      some quality (a copy of a copy) and takes time. It's worth it only when the TV can't play the source, or the source is big (4K / high bitrate).
+      ${notes.length ? `<ul>${notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}</div>`
+      : `<div class="summary">✓ <b>A sensible re-encode:</b><ul>${good.map(n => `<li>${esc(n)}</li>`).join("")}</ul></div>`;
+    $("convSummary").textContent = [
+      keptOf("video").length && videoNote,
+      keptOf("audio").length && "🔊 " + (nAc3 ? `${nAc3} of ${keptOf("audio").length} audio re-encoded to AC-3` : "audio copied"),
+      keptSubs.length && "💬 " + (nSrt ? `${nSrt} of ${keptSubs.length} subtitles converted to SRT` : "subtitles copied"),
+    ].filter(Boolean).join(" · ");
+    if (!kept.length) warnings.push("No streams selected.");
+    if (out && out.toLowerCase() === info.path.toLowerCase()) warnings.push("Output equals input — ffmpeg can't overwrite the file it reads.");
+
+    // Default flags: indexes are per-type positions in the OUTPUT
+    for (const [type, spec] of [["audio", "a"], ["subtitle", "s"]]) {
+      const d = defaults[type] ?? "keep";
+      if (d === "keep") continue;
+      kept.filter(s => s.codec_type === type).forEach((s, i) => {
+        const forced = s.disposition?.forced ? "+forced" : "";
+        args.push(`-disposition:${spec}:${i}`, (String(s.index) === d ? "default" : "0") + forced);
+      });
+    }
+    // File-level tags: optionally drop them all (release names, comments), then set the title
+    const ft = cleanTitle(outFileTitle());
+    if ($("optStripTags").checked) {
+      args.push("-map_metadata:g", "-1");
+      if (ft) args.push("-metadata", P("title=" + ft));
+    } else if (ft !== origFileTitle()) {
+      args.push("-metadata", P("title=" + ft));
+    }
+    args.push(P(out || "output.mkv"));
+  }
+
+  // Each .srt is an extra output of the same ffmpeg run, saved next to the output file
+  const dir = (out.match(/^.*[\\/]/) || info.path.match(/^.*[\\/]/) || [""])[0];
+  const names = srtNames(dir);
+  for (const [idx, name] of Object.entries(names)) args.push("-map", "0:" + idx, "-c:s", "srt", P(name));
+  if (!remux && !Object.keys(names).length) warnings.push("Nothing to do: video file is off and no subtitles are marked → .srt.");
+  $("srtList").innerHTML = Object.keys(names).length ? `<div class="srt-head">💬 Subtitle files to create</div>` +
+    Object.values(names).map(n => `<div class="file">${esc(n)}</div>`).join("") : "";
+
+  // Current file tags as chips; struck through = gone in the output (ffmpeg writes its own ENCODER tag anyway)
+  $("fileTags").innerHTML = Object.entries(info.format?.tags || {}).filter(([k]) => k.toLowerCase() !== "encoder").map(([k, v]) => {
+    const gone = remux && (k.toLowerCase() === "title" ? cleanTitle(outFileTitle()) !== v : $("optStripTags").checked);
+    return `<span class="chip${gone ? " struck" : ""}" title="${esc(v)}"><b>${esc(k)}</b>: ${esc(v.length > 48 ? v.slice(0, 48) + "…" : v)}</span>`;
+  }).join("");
+
+  $("cmd").textContent = "ffmpeg " + joinArgs(args, false);
+  const lines = ["@echo off", "chcp 65001 >nul", joinArgs([P(info.ffmpeg), ...args], true)];
+  if ($("optPause").checked) lines.push("pause");
+  $("bat").textContent = lines.join("\n");
+  $("warnings").innerHTML = warnings.map(w => `<div class="warn">⚠️ ${esc(w)}</div>`).join("");
+  renderRecap(kept, out, outExt, remux, Object.values(names), warnings);
+}
+
+// Step 5: plain-language recap of the output, track by track in output order
+function recapAction(s, isMp4) {
+  if (s.codec_type === "video")
+    return reencode(s) ? `re-encode → ${VENC[opt("optVideo")]} (${encoder().lib})` + (downscaled(s)
+        ? `, ${s.width}×${s.height} → ${outSize(s).join("×")}` : "")
+      : stripDv(s) ? "copy, drop Dolby Vision → HDR10" : "copy";
+  if (s.codec_type === "audio") return toAc3(s) ? `convert → AC-3 ${ac3Bitrate(s)}${s.channels > 6 ? ", 7.1 → 5.1" : ""}` : "copy";
+  if (s.codec_type === "subtitle") {
+    if (isMp4) return "convert → mov_text (MP4)";
+    if (toSrt(s)) return "convert → SRT";
+    if (s.ext) return "pack in from file" + (s.ext.charenc ? `, ${s.ext.charenc} → UTF-8` : "");
+  }
+  return "copy";
+}
+function tvStatus(s) {
+  if (s.codec_type !== "video" && s.codec_type !== "audio") return "";
+  const open = tvIssues(s).filter(i => !isFixed(s, i.fix));
+  const tip = esc(open.map(i => i.text).join("\n"));
+  return open.some(i => i.level === "bad") ? `<span class="compat bad" title="${tip}">⛔ won't play</span>`
+    : open.length ? `<span class="compat maybe" title="${tip}">⚠️ maybe</span>` : `<span class="compat ok">✓ safe</span>`;
+}
+function renderRecap(kept, out, outExt, remux, srtFiles, warnings) {
+  const isMp4 = ["mp4", "m4v", "mov"].includes(outExt), none = t => `<span class="muted">${t}</span>`;
+  const facts = [];
+  if (remux) {
+    facts.push(["📄 File", `${esc(out || "output.mkv")} ${none(`(${(outExt || "mkv").toUpperCase()}${$("optOverwrite").checked ? ", overwrites an existing file" : ""})`)}`]);
+    facts.push(["⏱ Work", kept.some(reencode)
+      ? `slow: video re-encode on ${isGpu() ? "the NVIDIA GPU (~15× realtime at 1080p)" : `${nThreads()} CPU threads (~1–1.5× realtime at 1080p)`}`
+      : kept.some(toAc3) ? "fast: copy + audio conversion (a few minutes)" : "fast: copy only (minutes, mostly disk speed)"]);
+    const ft = cleanTitle(outFileTitle()), ch = (info.chapters || []).length;
+    facts.push(["🏷️ Title", ft ? esc(ft) : none("none")]);
+    facts.push(["📑 Chapters", !ch ? none("none in source") : $("optChapters").checked ? `${ch} kept` : `${ch} removed`]);
+    facts.push(["🧾 Other tags", $("optStripTags").checked ? "removed" : "kept"]);
+  } else {
+    facts.push(["📄 File", none("no video file (step 4: Create video file is off)")]);
+  }
+  if (srtFiles.length) facts.push(["💬 .srt files", srtFiles.map(n => esc(baseName(n))).join("<br>")]);
+  if (warnings.length) facts.push(["⚠️ Warnings", `${warnings.length}, see step 6`]);
+  let html = `<dl class="recap-facts">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+  if (remux && kept.length) {
+    const rows = [`<thead><tr><th>Out</th><th>Source</th><th>What happens</th><th>Lang</th><th>Name</th><th>Flags</th><th>TV</th></tr></thead>`];
+    for (const type of TYPES) {
+      const list = kept.filter(s => typeOf(s) === type);
+      if (!list.length) continue;
+      rows.push(`<tbody data-type="${type}">` + list.map((s, k) => {
+        const d = s.disposition || {};
+        const isDef = type === "audio" || type === "subtitle"
+          ? ((defaults[type] ?? "keep") === "keep" ? !!d.default : String(s.index) === defaults[type]) : !!d.default;
+        const flags = [isDef && "default", d.forced && "forced", d.hearing_impaired && "hearing_impaired"].filter(Boolean)
+          .map(f => `<span class="tag flag-${f}">${FLAG_LABEL[f]}</span>`).join("");
+        const lang = s.tags?.language;
+        return `<tr>
+          <td class="idx">${TYPE_ICON[type]} ${k + 1}</td>
+          <td class="mono">${s.ext ? `<span class="tag tag-ext">ext</span> ${esc(baseName(s.ext.path))}` : `#${s.index} ${esc(s.codec_name)}`}</td>
+          <td>${esc(recapAction(s, isMp4))}</td>
+          <td>${lang ? `<span class="lang">${esc(lang)}</span>` : none("—")}</td>
+          <td>${esc(cleanTitle(trackTitle(s))) || none("—")}</td>
+          <td>${flags}</td>
+          <td>${tvStatus(s)}</td></tr>`;
+      }).join("") + `</tbody>`);
+    }
+    html += `<div class="table-wrap"><table class="recap">${rows.join("")}</table></div>`;
+  }
+  $("recap").innerHTML = html;
+}
+</script>
+</body>
+</html>

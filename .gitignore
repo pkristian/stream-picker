@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+
+# ffprobe result cache (rebuilt automatically) and its temp file
+.probe_cache.json
+.probe_cache.tmp
+
+# ffmpeg/ffprobe binaries may be placed next to the script
+*.exe
